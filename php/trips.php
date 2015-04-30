@@ -1,5 +1,6 @@
 <?php
 include 'TripsJSON.php';
+include 'db_connection.php';
 
 /*
 $json = "
@@ -7,28 +8,61 @@ $json = "
 ";
 print $json;
  */
-$servername = "sh-exp-dev-mysql.inhomecountry.com";
-$username = "ryaninhomecountr";
-$password = "qwerty";
-$dbname = "sh_exp_dev";
 
-try {
-    $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
-    // set the PDO error mode to exception
-    $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    //echo "Connected successfully";
-	$statement=$conn->prepare("select * from trip;");	
-	$statement->execute();
-	$results=$statement->fetchAll(PDO::FETCH_ASSOC);
-	//$json=json_encode($results);
-	//echo $json;
-	$tripsJson = new TripsJSON($results);
-	$json=json_encode($tripsJson);
-	echo $json;
+
+$action =  $_GET["action"];
+if ($action == "read"){
+	read();
 }
-catch(Exception $e)
+else if ($action == "create"){
+	create();
+}
+else if ($action == "update"){
+	update();
+}
+else if ($action == "delete"){
+	delete();
+}
+else{
+	echo "invalid action";
+}
+
+function read()
+{	
+	global $conn;  
+	try {
+			$statement=$conn->prepare("select * from trip;");	 
+			$statement->execute();
+			$results=$statement->fetchAll(PDO::FETCH_ASSOC);
+			$tripsJson = new TripsJSON($results); // for serialization into format ext expects
+			$json=json_encode($tripsJson);
+			echo $json;
+	}
+	catch(Exception $e)
+	{
+	    echo "Connection failed: ";
+			echo $e->getMessage();
+	}
+}
+
+function create()
 {
-    echo "Connection failed: ";
-	echo $e->getMessage();
+	$entityBody = file_get_contents('php://input');
+	echo $entityBody;
 }
+
+function update()
+{
+	$entityBody = file_get_contents('php://input');
+	$trips = json_decode($entityBody);
+	var_dump($trips);
+}
+
+function delete()
+{
+	$entityBody = file_get_contents('php://input');
+	echo $entityBody;
+}
+
+
 ?>

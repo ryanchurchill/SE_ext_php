@@ -17,10 +17,10 @@
     	type: 'ajax',
     	api:
         {
-            read: 'php/trips.php',
-            create: '../DBSetTrips.aspx?action=new',
-            update: '../DBSetTrips.aspx?action=update',
-            destroy: '../DBSetTrips.aspx?action=delete'
+            read: 'php/trips.php?action=read',
+            create: 'php/trips.php?action=create',
+            update: 'php/trips.php?action=update',
+            destroy: 'php/trips.php?action=delete'
         },
         //type: 'ajax',
         /*
