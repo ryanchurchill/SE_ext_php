@@ -1,0 +1,358 @@
+// ryan, check this: http://stackoverflow.com/questions/15634636/load-data-to-form-in-mvc
+Ext.define('se_main.controller.Main', {
+    extend: 'Ext.app.Controller',
+
+    stores: [
+        'Trips',
+        'PersonPresents',
+        'Persons',
+        'ExpensePaids',
+        'Balances',
+        'NewBalances',
+        'PeerPayments'
+    ],
+    models: [
+        'Trip',
+        'PersonPresent',
+        'Person',
+        'ExpensePaid',
+        'Balance',
+        'PeerPayment'
+    ],
+    views: [
+        'trip.TripGrid',
+        'trip.TripInfoFormPanel',
+        'trip.PersonPresentGrid',
+        'trip.ExpensePaidGrid',        
+        'FullTripPanel',
+        'PeerPaymentsPanel',
+        'peerpayments.BalanceGrid',
+        'peerpayments.NewBalanceGrid',
+        'peerpayments.PeerPaymentGrid',
+        'peerpayments.ExpensePaidGridRO',
+        'peerpayments.PersonPresentGridRO'
+    ],
+
+    currentTrip: null,    
+
+    init: function() {
+        this.control({
+            tripgrid: {
+                cellclick: this.selectTrip
+            },
+            button: {
+                click: this.onButtonClicked
+            },
+            personpresentgrid:{
+                edit: this.onPPRowEdit,
+                itemdeleteppbuttonclick: this.onPPRowDelete
+            },
+            expensepaidgrid:{
+                edit: this.onEPRowEdit,
+                itemdeleteepbuttonclick: this.onEPRowDelete
+            },
+            peerpaymentgrid:{
+                itemdeletep2pbuttonclick: this.onP2PRowDelete
+            }
+        });
+        
+        var peerPaymentsStore = this.getPeerPaymentsStore();
+        //peerPaymentsStore.addListener('load', this.afterPeerPaymentsLoad);
+        peerPaymentsStore.addListener('refresh', this.afterPeerPaymentsRefresh);        
+    },
+
+
+    userID: "1",
+
+
+    selectTrip: function(view, cell, cellIndex, record, row, rowIndex, e) {
+
+        this.currentTrip = record;
+        this.setTrip();
+        
+    },
+    
+    onButtonClicked: function(button) {
+        if (button.id == "btnSaveTrip") {
+            this.saveTrip();
+        }
+        if (button.id == "btnDeleteTrip") {
+            this.deleteTrip();
+        }
+        if (button.id == "btnNewPP") {
+            this.newPersonPresent(button);
+        }
+        if (button.id == "btnNewTrip"){
+            this.newTrip(button);
+        }
+        if (button.id == "btnNewEP"){
+            this.newExpensePaid(button);
+        }
+        if (button.id == "btnSeePayments"){
+            this.seePayments(button);
+        }
+        if (button.id == "btnCalcNewBalances"){
+            this.calcNewBalances(button);
+        }
+        if (button.id == "btnNewPayment"){
+            this.newPayment(button);
+        }
+    },
+    
+    // updates everything for currentTrip
+    setTrip: function(){      
+        
+        if (this.currentTrip != null){        
+            // load Trip Info panel with this record
+            Ext.getCmp('tripinfoformpanel').getForm().loadRecord(this.currentTrip);
+        
+            // load store for Person Present Grid
+            var ppStore = Ext.data.StoreManager.get("PersonPresents");        
+            ppStore.load({
+                params: { trip_id: this.currentTrip.get('trip_id') }
+            });
+            
+            // load store for Expense Grid
+            var epStore = Ext.data.StoreManager.get("ExpensePaids");
+            epStore.load({
+                params: { trip_id: this.currentTrip.get('trip_id') }
+            });
+            
+            // create and set store for Expense Grid people dropdown              
+            var epPeopleStore = Ext.create('se_main.store.Persons', {
+                storeId: 'epPeopleStore'
+            });
+            epPeopleStore.proxy.extraParams = { trip_id: this.currentTrip.get('trip_id')};
+            
+        }
+        else {
+            // if we don't have a record, clear the stores
+            Ext.data.StoreManager.get("PersonPresents").loadData([],false);
+            Ext.data.StoreManager.get("ExpensePaids").loadData([],false);
+        }
+    },
+
+    
+    
+    newTrip: function(button){
+        // establish new record
+        var record = new se_main.model.Trip({
+            user_id: this.userID,
+            trip_name: 'New Trip'
+        });
+        
+        // load record into Trip Info Form        
+        var form = Ext.getCmp('tripinfoformpanel').getForm();
+        form.loadRecord(record);        
+        
+        // insert record into store (will not sync with database yet)
+        Ext.data.StoreManager.lookup('Trips').insert(0, record);                
+        
+        // clear current trip
+        this.currentTrip = null;
+        this.setTrip();  
+    },
+
+    saveTrip: function() {
+
+        var form = Ext.getCmp('tripinfoformpanel').getForm();
+        var record = form.getRecord();
+
+        if (!record) { // if record is null we have new
+            // create a new record
+            record = Ext.data.StoreManager.lookup('Trips').add(form.getFieldValues())[0];
+            record.set("user_id", this.userID);
+            form.loadRecord(record);
+        }
+        else {
+            form.updateRecord(record); // this updates our local store
+        }
+        record.store.sync(); // this updates the server with local store change
+        //console.log("Reloading");
+        //record.store.reload(); // for new trips, we need to reload to get the trip_id
+        
+        // load store for People Dropdown in Expense Grid
+        var ppStore = Ext.data.StoreManager.get("PersonPresents");        
+        ppStore.load({
+            params: { trip_id: record.get('trip_id') }
+        });
+    },
+
+    deleteTrip: function() {
+        var form = Ext.getCmp('tripinfoformpanel').getForm();
+        var record = form.getRecord();
+
+        if (record) {
+            var store = record.store;
+            record.store.remove(record);
+            store.sync(); // this updates the server with local store change
+            form.reset();
+        }
+
+    },
+
+    newPersonPresent: function(button) {
+        if (!this.currentTrip) {
+            Ext.MessageBox.alert('No Trip Selected', 'Please select or create a trip.');
+            return;
+        }
+        /*
+        if (this.isPPStoreDirty()){
+            Ext.MessageBox.alert('Uncomitted Data', 'Please update or cancel existing changes before adding a new person.');
+            return;
+        }
+        */
+
+        // create new record, default to trip dates
+        var record = new se_main.model.PersonPresent({
+            trip_id: this.currentTrip.get('trip_id'),
+            start_date: this.currentTrip.get('start_date'),
+            end_date: this.currentTrip.get('end_date')
+        });
+        
+        // get store and index
+        var storePersonPresents = Ext.data.StoreManager.lookup('PersonPresents');
+        var index = storePersonPresents.count();
+
+        // insert record into the store
+        storePersonPresents.insert(index, record);
+        
+        // Position the user to edit the record
+        Ext.getCmp('personpresentgrid').editingPlugin.startEdit(index, 0);
+        
+    },
+    
+    /*
+    isPPStoreDirty: function(){
+        var records = Ext.data.StoreManager.lookup('PersonPresents').getRange();
+        var isDirty = false;
+        for(var i =0; i < records.length; i++){
+            var rec = records[i];
+
+            if(rec.dirty == true){
+                isDirty = true;
+                break;
+            }
+        }
+        return isDirty;
+    },
+    */
+    
+    onPPRowEdit: function(editor, e){
+        Ext.data.StoreManager.lookup('PersonPresents').sync();
+    },
+    
+    onPPRowDelete: function(grid, rowIndex, colIndex){
+        grid.getStore().removeAt(rowIndex); 
+        grid.getStore().sync(); // sync store with database
+    },
+    
+    newExpensePaid: function(button){
+        if (!this.currentTrip) {
+            Ext.MessageBox.alert('No Trip Selected', 'Please select or create a trip.');
+            return;
+        }
+        
+        var record = new se_main.model.ExpensePaid({
+            trip_id: this.currentTrip.get('trip_id'),
+            expense_date: this.currentTrip.get('start_date')            
+        });
+        
+        // get store and index
+        var storeExpensePaids = Ext.data.StoreManager.lookup('ExpensePaids');
+        var index = storeExpensePaids.count();
+        
+        // insert record into the store
+        storeExpensePaids.insert(index, record);
+        
+        // Position the user to edit the record
+        Ext.getCmp('expensepaidgrid').editingPlugin.startEdit(index, 0);
+    },
+    
+    onEPRowEdit: function(editor, e){
+        Ext.data.StoreManager.lookup('ExpensePaids').sync();
+    },
+    
+    onEPRowDelete: function(grid, rowIndex, colIndex){
+        grid.getStore().removeAt(rowIndex); 
+        grid.getStore().sync(); // sync store with database
+    },        
+    
+    seePayments: function(button){
+        //Ext.getCmp('full-trip-panel').collapse(true); // collapse this panel to expose new panel - not necessary for accordion
+        Ext.getCmp('peer-payments-panel').expand(true); // reveal new panel
+        
+        // load balance store - backend calculates the balances and stores in db
+        var balStore = Ext.data.StoreManager.get("Balances");        
+        balStore.load({
+            params: { trip_id: this.currentTrip.get('trip_id') }
+        });        
+        
+        // load peer payments store - backend calculates the payments and stores in db
+        // this must happen after Balances store has loaded
+        var peerPaymentsStore = Ext.data.StoreManager.get("PeerPayments");
+        peerPaymentsStore.load({
+            params: { 
+                trip_id: this.currentTrip.get('trip_id'),
+                set_defaults: true
+            }
+        });
+        
+        // load new balance store - uses the balances and peer payments that were saved to database above
+        // happens automatically in peerPaymentStore afterLoad
+        /*
+        var newBalStore = Ext.data.StoreManager.get("NewBalances");
+        newBalStore.load({
+            params: { trip_id: this.currentTrip.get('trip_id') }
+        });
+        */
+    },
+    
+    onP2PRowDelete: function(grid, rowIndex, colIndex){
+        grid.getStore().removeAt(rowIndex);
+    },
+    
+    calcNewBalances: function(button){
+        //var newBalStore = Ext.data.StoreManager.get("NewBalances");
+        var p2pStore = Ext.data.StoreManager.get("PeerPayments");
+        
+        p2pStore.sync(); // sync p2p store - will save any p2p changes to database        
+        // syncing p2p store will automatically call afterPeerPaymentsRefresh, which syncs the balance store as well
+        
+    },
+    
+    afterPeerPaymentsRefresh: function (store) {
+        var newBalStore = Ext.data.StoreManager.get("NewBalances");
+        if (store.getCount() > 0){
+            var trip_id = store.getAt(0).get('trip_id');            
+            newBalStore.load({
+                params: { trip_id: trip_id }
+            });
+        } else{
+            newBalStore.loadData([],false);
+        }
+    },
+    
+    newPayment: function(button){
+        if (!this.currentTrip) {
+            Ext.MessageBox.alert('No Trip Selected', 'Please select or create a trip.');
+            return;
+        }
+        
+        var record = new se_main.model.PeerPayment({
+            trip_id: this.currentTrip.get('trip_id'),
+            is_active: true
+        });
+        
+        // get store and index
+        var storePeerPayments = Ext.data.StoreManager.lookup('PeerPayments');
+        var index = storePeerPayments.count();
+        
+        // insert record into the store
+        storePeerPayments.insert(index, record);
+        
+        // Position the user to edit the record
+        Ext.getCmp('peerpaymentgrid').editingPlugin.startEdit(index, 0);
+    },
+
+});
