@@ -41,7 +41,7 @@
             destroy: 'http://localhost:3000/trips/destroy'
         },
         */
-       	/*
+       	/*//
         type: 'rest',		       
        	//url: 'http://localhost:3000/trips',
        	//url: 'https://morning-ridge-5206.herokuapp.com/trips',
