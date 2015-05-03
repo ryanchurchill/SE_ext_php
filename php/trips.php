@@ -1,6 +1,7 @@
 <?php
 include 'TripsJSON.php';
 include 'db_connection.php';
+include 'DALTrip.php';
 
 /*
 $json = "
@@ -14,6 +15,7 @@ $action =  $_GET["action"];
 if ($action == "read"){
 	read();
 }
+/*
 else if ($action == "create"){
 	create();
 }
@@ -23,28 +25,27 @@ else if ($action == "update"){
 else if ($action == "delete"){
 	delete();
 }
+*/
 else{
-	echo "invalid action";
+	dal($action);
 }
 
 function read()
 {	
-	global $conn;  
-	try {
-			$statement=$conn->prepare("select * from trip;");	 
-			$statement->execute();
-			$results=$statement->fetchAll(PDO::FETCH_ASSOC);
-			$tripsJson = new TripsJSON($results); // for serialization into format ext expects
-			$json=json_encode($tripsJson);
-			echo $json;
-	}
-	catch(Exception $e)
-	{
-	    echo "Connection failed: ";
-			echo $e->getMessage();
-	}
+	$trips = DALTrip::getTrips();
+	$tripsJson = new TripsJSON($trips); // for serialization into format ext expects
+	$json=json_encode($tripsJson);
+	echo $json;
 }
 
+function dal($action){
+	$entityBody = file_get_contents('php://input');
+	$trips = json_decode($entityBody);
+	//var_dump($trips);
+	$trips = DALTrip::setTrips($action, $trips);
+}
+
+/*
 function create()
 {
 	$entityBody = file_get_contents('php://input');
@@ -63,6 +64,6 @@ function delete()
 	$entityBody = file_get_contents('php://input');
 	echo $entityBody;
 }
-
+*/
 
 ?>
