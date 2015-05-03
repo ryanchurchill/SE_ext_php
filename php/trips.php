@@ -41,8 +41,10 @@ function read()
 function dal($action){
 	$entityBody = file_get_contents('php://input');
 	$trips = json_decode($entityBody);
-	//var_dump($trips);
 	$trips = DALTrip::setTrips($action, $trips);
+	$tripsJson = new TripsJSON($trips); // for serialization into format ext expects
+	$json=json_encode($tripsJson);
+	echo $json;
 }
 
 /*

@@ -5,7 +5,7 @@ Class DALTrip
 	
 	public static function getTrips()
 	{		
-		 return DALTrip::runSQL("select * from trip;"); 
+		 return DALTrip::runSQL("select * from trip;", true); 
 	}
 	
 	public static function setTrips($action, $trips)
@@ -27,28 +27,49 @@ values(
       '$trip->trip_name'  
 );
 EOT;
-#SELECT LAST_INSERT_ID();				 				 				
-				$results = DALTrip::runSQL($sql);
-				//$results = DALTrip::runSQL("select * from trip;"); 
-				//var_dump($results);
+				$trip_id = DALTrip::runSQL($sql, false, true);
+				$trip->trip_id = $trip_id;
 			}
-			
+			else if ($action=="update")
+			{
+				$sql = <<<EOT
+update trip
+set
+	start_date = '$trip->start_date',
+	end_date = '$trip->end_date',
+	trip_name = '$trip->trip_name'
+where
+	trip_id = $trip->trip_id;
+EOT;
+				DALTrip::runSQL($sql, false, false);
+			}
+			else if ($action=="delete")
+			{
+				$sql = <<<EOT
+delete trip from trip where trip.trip_id = $trip->trip_id;
+EOT;
+				DALTrip::runSQL($sql, false, false);
+			}
 		}
+		return $trips;
 	}
 	
-	public static function runSQL($sql){		
+	public static function runSQL($sql, $getRecordset, $getIdentity){		
 		global $conn;  		
 		try {
 				//$statement=$conn->prepare($sql);	 
 				//$statement->execute();
-				echo "1";
 				$statement=$conn->query($sql);
-				echo "2";
-				$results=$statement->fetchAll(PDO::FETCH_ASSOC);
-				echo "3";
+				if ($getRecordset){
+					$results=$statement->fetchAll(PDO::FETCH_ASSOC);
+				}
 				$statement->closeCursor();
-				echo "4";
-				return $results;				
+				if ($getRecordset){
+					return $results;
+				}
+				if ($getIdentity) {
+					return $conn->lastInsertId();
+				}				
 		}
 		catch(Exception $e)
 		{
